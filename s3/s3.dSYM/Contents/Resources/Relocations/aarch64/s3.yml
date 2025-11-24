@@ -1,0 +1,22 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     s3
+relocations:
+  - { offset: 0x19, size: 0x8, addend: 0x0, symName: _construct_shell_prompt, symObjAddr: 0x0, symBinAddr: 0x100000560, symSize: 0xCC }
+  - { offset: 0xD3, size: 0x8, addend: 0x0, symName: _run_cd, symObjAddr: 0x8EC, symBinAddr: 0x100000E4C, symSize: 0x140 }
+  - { offset: 0x163, size: 0x8, addend: 0x0, symName: _is_cd, symObjAddr: 0x824, symBinAddr: 0x100000D84, symSize: 0xC8 }
+  - { offset: 0x1B5, size: 0x8, addend: 0x0, symName: _init_lwd, symObjAddr: 0x7F0, symBinAddr: 0x100000D50, symSize: 0x34 }
+  - { offset: 0x1DF, size: 0x8, addend: 0x0, symName: _launch_program_with_redirection, symObjAddr: 0x744, symBinAddr: 0x100000CA4, symSize: 0xAC }
+  - { offset: 0x236, size: 0x8, addend: 0x0, symName: _child_with_redirection, symObjAddr: 0x604, symBinAddr: 0x100000B64, symSize: 0x140 }
+  - { offset: 0x2C6, size: 0x8, addend: 0x0, symName: _parse_command_redirection, symObjAddr: 0x3F8, symBinAddr: 0x100000958, symSize: 0x20C }
+  - { offset: 0x339, size: 0x8, addend: 0x0, symName: _command_with_redirection, symObjAddr: 0x394, symBinAddr: 0x1000008F4, symSize: 0x64 }
+  - { offset: 0x384, size: 0x8, addend: 0x0, symName: _remove_tokens, symObjAddr: 0x2D8, symBinAddr: 0x100000838, symSize: 0xBC }
+  - { offset: 0x3FC, size: 0x8, addend: 0x0, symName: _launch_program, symObjAddr: 0x240, symBinAddr: 0x1000007A0, symSize: 0x98 }
+  - { offset: 0x444, size: 0x8, addend: 0x0, symName: _child, symObjAddr: 0x218, symBinAddr: 0x100000778, symSize: 0x28 }
+  - { offset: 0x47D, size: 0x8, addend: 0x0, symName: _parse_command, symObjAddr: 0x160, symBinAddr: 0x1000006C0, symSize: 0xB8 }
+  - { offset: 0x4D4, size: 0x8, addend: 0x0, symName: _read_command_line, symObjAddr: 0xCC, symBinAddr: 0x10000062C, symSize: 0x94 }
+  - { offset: 0x51F, size: 0x8, addend: 0x0, symName: _construct_shell_prompt, symObjAddr: 0x0, symBinAddr: 0x100000560, symSize: 0xCC }
+  - { offset: 0x57C, size: 0x8, addend: 0x0, symName: _reap, symObjAddr: 0x0, symBinAddr: 0x100000F8C, symSize: 0x1C }
+  - { offset: 0x603, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x1C, symBinAddr: 0x100000FA8, symSize: 0xBC }
+  - { offset: 0x6A3, size: 0x8, addend: 0x0, symName: _reap, symObjAddr: 0x0, symBinAddr: 0x100000F8C, symSize: 0x1C }
+...
