@@ -1,4 +1,4 @@
-### **s3 Shell (Software Systems Shell)**
+#**s3 Shell (Software Systems Shell)**
 
 *Authors: Jingting, Fengye*
 
@@ -197,4 +197,4 @@ Signal Handling: The shell does not implement custom signal handlers for SIGINT 
 Background Jobs: There is no support for background execution (e.g., &). All commands run in the foreground, and the shell blocks until they complete.
 
 Complex Redirection Syntax: The shell assumes spaces around redirection operators for parsing logic in some contexts and only supports single redirection operators per command segment (e.g., cmd < in > out simultaneous redirection is not supported).
-# software_Shell_ImplementationS3
+
