@@ -1,4 +1,4 @@
-#**s3 Shell (Software Systems Shell)**#
+# **s3 Shell (Software Systems Shell)**
 
 *Authors: Jingting, Fengye*
 
