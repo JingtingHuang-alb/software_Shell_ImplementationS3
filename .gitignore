@@ -5,3 +5,6 @@ s3
 # 忽略 VSCode 的配置文件夹
 .vscode/
 
+txt/phrases.txt
+results/rev_sort_phr.txt
+txt/folder_contents.txt

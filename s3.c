@@ -1,5 +1,8 @@
 #include "s3.h"
-
+int split_ignoring_parentheses(char *line, char separator, char *parts[], int max_parts);
+void run_batched_commands(char *line);
+int run_subshell_if_needed(char *line);
+char* skip_whitespace(char* s);
 ///Simple for now, but will be expanded in a following section
 void construct_shell_prompt(char shell_prompt[])
 {
@@ -111,7 +114,7 @@ void launch_program(char *args[], int argsc)
     }
 }
 
-// === 以下是新增的 Section 2 重定向功能 ===
+//Section 2 重定向
 
 // 检查是否有重定向符号
 int command_with_redirection(char *line) {
@@ -160,7 +163,7 @@ void launch_program_with_redirection(char *args[], int argsc) {
     if (pid < 0) {
         perror("fork failed");
     } else if (pid == 0) {
-        // === 子进程 ===
+        //子进程
         
         // 3. 打开文件并使用 dup2 重定向
         if (redirect_type == 1) { // > (覆盖输出)
@@ -243,25 +246,17 @@ int command_with_pipes(char *line) {
 }
 
 // 处理管道命令
-void launch_program_with_pipes(char *line) {
-    // 1. 先把长命令按 | 切割成多个子命令字符串
-    // 例如 "ls | grep a | wc" -> ["ls", " grep a", " wc"]
-    char *commands[MAX_ARGS]; 
-    int num_cmds = 0;
-    
-    char *token = strtok(line, "|");
-    while (token != NULL && num_cmds < MAX_ARGS) {
-        commands[num_cmds++] = token;
-        token = strtok(NULL, "|");
-    }
+// 同样升级为智能切割，防止切断 "(ls | wc)" 这种子管道
+    void launch_program_with_pipes(char *line) {
+    char *commands[MAX_ARGS];
+    // 使用智能切割，而不是 strtok
+    int num_cmds = split_ignoring_parentheses(line, '|', commands, MAX_ARGS);
 
     int i;
     int pipefd[2]; 
-    int prev_pipe_read = -1; // 保存上一个管道的读取端
+    int prev_pipe_read = -1;
 
     for (i = 0; i < num_cmds; i++) {
-        // 如果不是最后一个命令，就需要创建一个新管道
-        // 用来把数据传给下一个命令
         if (i < num_cmds - 1) {
             if (pipe(pipefd) == -1) {
                 perror("pipe failed");
@@ -269,101 +264,55 @@ void launch_program_with_pipes(char *line) {
             }
         }
 
-        // Fork 一个子进程来跑当前的命令
         pid_t pid = fork();
 
         if (pid == 0) {
-            // === 子进程开始 ===
-            
-            // --- Step 1: 基础管道建设 ---
-            
-            // A. 处理输入 (耳朵)：如果有“上一棒”传过来的数据
+            // === 子进程 ===
             if (prev_pipe_read != -1) {
-                // 把 stdin (0) 接到上一个管道的出口上
                 dup2(prev_pipe_read, STDIN_FILENO);
-                close(prev_pipe_read); // 接完就可以关掉旧的了
+                close(prev_pipe_read);
             }
-
-            // B. 处理输出 (嘴巴)：如果不是最后一个命令，默认喊给下一棒听
             if (i < num_cmds - 1) {
-                // 把 stdout (1) 接到当前管道的入口上
                 dup2(pipefd[1], STDOUT_FILENO);
-                
-                // 关掉管道两端（手里拿着没用了，嘴巴已经接好了）
                 close(pipefd[0]); 
                 close(pipefd[1]);
             }
 
-            // --- Step 2: 重定向检查 ---
-            // 如果这行命令里有 '>'，说明要把嘴巴从管道(或屏幕)改接到文件上
-            // 这会覆盖掉刚才 Step 1 里的设置，这是正确的逻辑！
+            // 核心改动：把解析逻辑委托给 process_single_command
+            // 以前这里是直接 execvp。
+            // 比如管道的一环可能是一个 subshell: ls | (cd txt; cat f.txt) | wc
             
-            if (strchr(commands[i], '>') != NULL) {
-                // 1. 拿出刀 (strtok)，以 '>' 为界，把命令切成两半
-                // 前半段："grep a " (命令)
-                // 后半段：" out.txt" (文件名)
-                char *cmd_part = strtok(commands[i], ">"); 
-                char *file_part = strtok(NULL, ">"); // 拿到 '>' 后面的部分
-
-                if (file_part != NULL) {
-                    // 2. 清理文件名 (去掉前后的空格)
-                    char *filename = strtok(file_part, " \t\n");
-
-                    // 3. 打开文件 (准备好接收数据的桶)
-                    // O_TRUNC 表示清空重写；O_CREAT 表示没有就创建
-                    int fd_out = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                    if (fd_out == -1) {
-                        perror("open redirection file failed");
-                        exit(1);
-                    }
-
-                    // 4. 做搭桥手术 (dup2)
-                    // 这一步最关键：它把 STDOUT 强行改到了文件上
-                    dup2(fd_out, STDOUT_FILENO); 
-                    
-                    // 5. 手术做完了，把工具扔掉
-                    close(fd_out);
-                }
-            }
-
-            // --- Step 3: 最终执行 ---
+            // 为了避免无限递归 fork (process_single_command 会再次 fork)，
+            // 实际上，process_single_command 是设计来处理 "line" 的，它会根据情况 fork。
+            // 但我们现在已经在 child 里面了。
             
-            // C. 解析并执行命令
-            // 这里的 commands[i] 已经被 Step 2 的 strtok 干净利落地切断了
-            // 它现在只剩下 ">" 前面的部分 (比如 "grep a")
-            char *cmd_args[MAX_ARGS];
-            int cmd_argsc;
-            parse_command(commands[i], cmd_args, &cmd_argsc);
+            // 简单方案：直接当做单个命令处理。
+            // 如果 commands[i] 是 subshell "(...)"，run_subshell_if_needed 会处理它。
+            // 如果是普通命令 "ls -l"，launch_program 会处理它。
+            // 注意：process_single_command 会 wait/reap。在子进程里 wait 没问题。
+            // 唯一的副作用是多了一层 fork (管道子进程 -> 命令子进程)，但逻辑是正确的。
             
-            // 只有到了所有准备工作做完的最后一步，才真正exec
-            child(cmd_args, cmd_argsc);
-            exit(1); // child 应该不会返回，如果返回了就是出错了
+            process_single_command(commands[i]);
+            exit(0); 
         } 
         else if (pid < 0) {
             perror("fork failed");
             return;
         }
 
-        // === 父进程逻辑  ===
-        
-        // 1. 关掉上一个管道的读取端
-        if (prev_pipe_read != -1) {
-            close(prev_pipe_read);
-        }
-
-        // 2. 准备下一轮循环
+        // === 父进程 ===
+        if (prev_pipe_read != -1) close(prev_pipe_read);
         if (i < num_cmds - 1) {
             prev_pipe_read = pipefd[0];
-            close(pipefd[1]); // 必须关掉写端，否则死锁
+            close(pipefd[1]);
         }
     }
 
-    // 等待所有子进程结束
     for (i = 0; i < num_cmds; i++) {
         wait(NULL);
     }
 }
-// s3.c - Section 5 Implementation
+//Section 5 Implementation
 
 // 检查是否有分号 ;
 int command_with_batch(char *line) {
@@ -371,13 +320,23 @@ int command_with_batch(char *line) {
     return 0;
 }
 
-// === 这是把原来 main 函数里的逻辑提取出来的 ===
+//这是把原来 main 函数里的逻辑提取出来的
 // 这样 batched commands 就可以循环调用它了
+
+// s3.c - Update process_single_command
+
 void process_single_command(char *line) {
     char *args[MAX_ARGS];
     int argsc;
 
+    // 优先检查 Subshell
+    // 如果 line 是 "(cd txt; ls)"，它会被 run_subshell_if_needed 捕获并处理
+    if (run_subshell_if_needed(line)) {
+        return; // 如果已作为子 Shell 执行，直接返回
+    }
+
     // 1. 检查管道 (Section 4)
+    // 注意：launch_program_with_pipes 现在也支持包含 subshell 的管道了
     if (command_with_pipes(line)) {
         launch_program_with_pipes(line);
     }
@@ -385,13 +344,11 @@ void process_single_command(char *line) {
     else if (command_with_redirection(line)) {
         parse_command(line, args, &argsc);
         launch_program_with_redirection(args, argsc);
-        reap(); // 重定向是单个子进程，需要 wait
+        reap();
     }
     // 3. 普通命令 & cd (Section 1 & 3)
     else {
         parse_command(line, args, &argsc);
-        
-        // 防止空命令 (比如输入了很多空格)
         if (argsc == 0) return;
 
         if (strcmp(args[0], "cd") == 0) {
@@ -399,29 +356,97 @@ void process_single_command(char *line) {
         }
         else {
             launch_program(args, argsc);
-            reap(); // 普通命令需要 wait
+            reap();
         }
     }
 }
 
-    // 执行批处理命令
-    void run_batched_commands(char *line) {
-    // 策略：为了避免 strtok 冲突，我们先把所有子命令切出来，存到数组里
+ // 支持 subshell 的run_bacthed_commands
+void run_batched_commands(char *line) {
     char *commands[MAX_ARGS];
-    int num_cmds = 0;
-    
-    // 按分号切割
-    char *token = strtok(line, ";");
-    while (token != NULL && num_cmds < MAX_ARGS) {
-        commands[num_cmds++] = token;
-        token = strtok(NULL, ";");
-    }
+    // 使用智能切割，而不是 strtok
+    int num_cmds = split_ignoring_parentheses(line, ';', commands, MAX_ARGS);
 
-    // 切割完毕后，再挨个执行
-    // 这样内层的 strtok 就不会干扰外层的逻辑了
     int i;
     for (i = 0; i < num_cmds; i++) {
-        // 这里的 commands[i] 可能包含前后空格，但 parse_command 还是能处理的
         process_single_command(commands[i]);
     }
+}
+
+char* skip_whitespace(char* s) {
+    while (*s == ' ' || *s == '\t') s++;
+    return s;
+}
+
+int run_subshell_if_needed(char *line) {
+    char *p = skip_whitespace(line);
+    
+    // 1. 检查是不是以 '(' 开头
+    if (*p != '(') return 0; // 不是 Subshell
+
+    // 2. 找匹配的最后一个 ')'
+    // 假设最后面的 ')' 是匹配的
+    char *end = strrchr(p, ')');
+    if (end == NULL) {
+        fprintf(stderr, "s3: unmatched parentheses\n");
+        return 1; // 虽然格式错，但也算处理了（报错）
+    }
+
+    // 3. 提取括号里面的内容
+    // 比如 "(cd txt; ls)" -> "cd txt; ls"
+    *end = '\0'; // 把右括号改成结束符
+    char *inner_cmd = p + 1; // 跳过左括号
+
+    // 4. Fork 一个子进程来跑这个“子世界"
+    pid_t pid = fork();
+
+    if (pid == 0) {
+        //子进程
+        // 我们递归调用 run_batched_commands。
+        // 因为是在子进程里调用的，所以里面的 cd 不会影响外面的父 Shell。
+        run_batched_commands(inner_cmd);
+        
+        exit(0); // 跑完必须退出，否则子进程会变成另一个 Shell
+    } 
+    else if (pid > 0) {
+        //父进程 
+        wait(NULL); // 等待子世界结束
+    } else {
+        perror("fork failed");
+    }
+
+    return 1; // 表示已处理
+}
+
+//智能切割字符串
+// 它可以识别括号，不会切断括号里的分号或管道
+// separator: 要切割的字符 (比如 ';' 或 '|')
+// max_parts: 数组最大容量
+// 返回切割出的数量
+int split_ignoring_parentheses(char *line, char separator, char *parts[], int max_parts) {
+    int count = 0;
+    int paren_level = 0; // 记录括号深度
+    char *start = line;
+    char *p = line;
+
+    while (*p != '\0' && count < max_parts) {
+        if (*p == '(') {
+            paren_level++;
+        } 
+        else if (*p == ')') {
+            if (paren_level > 0) paren_level--;
+        }
+        else if (*p == separator && paren_level == 0) {
+            // 只有当不在括号里时，才进行切割
+            *p = '\0'; // 切断字符串
+            parts[count++] = start;
+            start = p + 1; // 下一段的开始
+        }
+        p++;
+    }
+    // 处理最后一段
+    if (start != NULL && count < max_parts) {
+        parts[count++] = start;
+    }
+    return count;
 }
