@@ -1,4 +1,4 @@
-# **s3 Shell (Software Systems Shell)(Core version)(Please go to branch: `fully_implemented_shell_with_extension2` for the fully implemented version)**
+# **s3 Shell (Core version) (Please go to branch: `fully_implemented_shell_with_extension2` for the fully implemented version)**
 
 *Authors: Jingting, Fengye*
 
